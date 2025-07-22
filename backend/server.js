@@ -5,17 +5,19 @@ const express = require('express');
 const cors = require('cors');
 const passport = require('passport');
 const cookieParser = require('cookie-parser');
-const morgan = 'morgan';
+const morgan = require('morgan'); // FIX: Correctly require the morgan package
 const webpush = require('web-push');
-const db = require('./database/database.js'); // FIX: Added .js extension
+const path = require('path'); // NEW: Import the path module for robust pathing
 const util = require('util');
 const crypto = require('crypto');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const { botLogger } = require('./middleware/botLogger.js'); // FIX: Added .js extension
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-const { startTransactionListener } = require('./services/transactionListenerService.js');
-const { startConfirmationService } = require('./services/transactionConfirmationService.js');
+// --- FIX: Use absolute paths for local module imports ---
+const db = require(path.join(__dirname, 'database', 'database.js'));
+const { botLogger } = require(path.join(__dirname, 'middleware', 'botLogger.js'));
+const { startTransactionListener } = require(path.join(__dirname, 'services', 'transactionListenerService.js'));
+const { startConfirmationService } = require(path.join(__dirname, 'services', 'transactionConfirmationService.js'));
 
 db.get = util.promisify(db.get);
 db.run = util.promisify(db.run);
@@ -37,7 +39,6 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
 }
 
 // --- Middleware Setup ---
-// [MODIFIED] CORS is now configured for your live production frontend URL.
 const corsOptions = {
     origin: 'https://bloxbatttles.onrender.com',
     credentials: true,
@@ -135,11 +136,10 @@ passport.use(new GoogleStrategy({
 ));
 
 // --- API Routes ---
-const apiRoutes = require('./routes/index.js'); // FIX: Added /index.js for clarity
+const apiRoutes = require(path.join(__dirname, 'routes', 'index.js'));
 app.use('/api', botLogger, apiRoutes);
 
 // --- Server Startup ---
-// [MODIFIED] The server now listens on host 0.0.0.0, which is required by Render.
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Backend API server listening on http://0.0.0.0:${PORT}`);
     
