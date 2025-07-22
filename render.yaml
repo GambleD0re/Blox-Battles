@@ -64,7 +64,7 @@ services:
     runtime: static            # Marks it as a static site :contentReference[oaicite:1]{index=1}
     branch: main
     rootDir: frontend
-    buildCommand: npm install && npm start
+    buildCommand: npm install && npm build
     staticPublishPath: dist
     routes:
       - type: rewrite
