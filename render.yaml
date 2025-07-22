@@ -3,7 +3,7 @@
 
 databases:
   - name: blox-battles-db
-    plan: basic‑256mb
+    plan: Basic-256mb
     region: oregon
     postgresMajorVersion: "15"
     ipAllowList: []
