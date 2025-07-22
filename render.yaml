@@ -14,7 +14,7 @@ services:
     name: blox-battles-api
     runtime: node
     branch: main
-    rootDirectory: backend
+    rootDir: backend
     plan: starter
     region: oregon
     buildCommand: npm install
@@ -58,12 +58,12 @@ services:
       - key: PAYOUT_WALLET_PRIVATE_KEY
         sync: false
 
-  # 2) React/Vite frontend as a static site
-  - type: web                    # static sites are still 'web' services
+  # 2) React/Vite frontend as a Static Site
+  - type: web
     name: blox-battles-app
-    runtime: static             # <-- this marks it as a static site :contentReference[oaicite:0]{index=0}
+    runtime: static            # Marks it as a static site :contentReference[oaicite:1]{index=1}
     branch: main
-    rootDirectory: frontend
+    rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     routes:
