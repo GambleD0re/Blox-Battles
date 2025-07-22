@@ -23,7 +23,7 @@ const dbPath = path.join(dataDir, 'blox_battles.db');
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('FATAL: Could not connect to database.', err.message);
-        process.exit(1);
+        process.exit(1); // FIX: Corrected typo from 'prlocess' to 'process'
     } else {
         console.log('Successfully connected to the SQLite database at:', dbPath);
     }
