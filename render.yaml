@@ -9,8 +9,8 @@ services:
   - type: web
     runtime: node
     name: blox-battles-api
-    plan: starter
     region: oregon
+    plan: starter
     rootDir: backend
     buildCommand: npm install
     startCommand: node server.js
@@ -57,7 +57,6 @@ services:
     runtime: static
     name: blox-battles-app
     plan: starter
-    region: oregon
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
