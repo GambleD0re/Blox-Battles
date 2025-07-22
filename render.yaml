@@ -10,7 +10,7 @@ services:
     plan: starter # 'starter' is sufficient for most applications.
     region: oregon # Or choose the region closest to you.
     ipAllowList: [] # Allows access from any IP, suitable for Render services.
-    pga_version: "15" # Specify PostgreSQL version
+    postgresMajorVersion: 15
 
   # 2. Backend Web Service (Node.js/Express)
   - type: web
