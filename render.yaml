@@ -3,16 +3,15 @@
 # You can deploy all services at once by creating a "Blueprint"
 # in Render and pointing it to your Git repository.
 
-services:
-  # 1. PostgreSQL Database
-  - type: psql
-    name: blox-battles-db
+databases:
+  - name: blox-battles-db
     plan: starter # 'starter' is sufficient for most applications.
-    region: oregon # Or choose the region closest to you.
+    region: oregon
     ipAllowList: [] # Allows access from any IP, suitable for Render services.
     postgresMajorVersion: 15
 
-  # 2. Backend Web Service (Node.js/Express)
+services:
+  # 1. Backend Web Service (Node.js/Express)
   - type: web
     name: blox-battles-api
     plan: starter
@@ -21,20 +20,17 @@ services:
     rootDir: backend
     buildCommand: npm install
     startCommand: node server.js
-    healthCheckPath: /api/status # A simple endpoint to check if the server is up.
+    healthCheckPath: /api/status
     envVars:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        fromService:
-          type: psql
+        fromDatabase:
           name: blox-battles-db
           property: connectionString
       - key: SERVER_URL
         value: https://blox-battles-app.onrender.com
-      # --- Secrets ---
-      # These should be set in the Render Dashboard under Environment.
-      # Do NOT commit these to your repository.
+      # Secrets (set in Render Dashboard only)
       - key: JWT_SECRET
         sync: false
       - key: SESSION_SECRET
@@ -64,7 +60,7 @@ services:
       - key: PAYOUT_WALLET_PRIVATE_KEY
         sync: false
 
-  # 3. Frontend Static Site (React/Vite)
+  # 2. Frontend Static Site (React/Vite)
   - type: web
     name: blox-battles-app
     plan: starter
@@ -73,8 +69,6 @@ services:
     rootDir: frontend
     buildCommand: npm install && npm run build
     publishDir: dist
-    # Rewrite rule for single-page applications (like React Router)
-    # This ensures that refreshing on any client-side route works correctly.
     routes:
       - type: rewrite
         source: /*
@@ -83,4 +77,4 @@ services:
       - key: VITE_API_BASE_URL
         value: https://blox-battles-api.onrender.com/api
       - key: VITE_STRIPE_PUBLISHABLE_KEY
-        sync: false # Set this as a secret in the Render Dashboard
+        sync: false
