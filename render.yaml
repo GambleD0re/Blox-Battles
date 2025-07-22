@@ -1,16 +1,16 @@
 # render.yaml
-# Defines the services for your Blox-Battles application on Render.
-# This Blueprint will create a PostgreSQL database, a Node.js backend,
-# and a static React frontend.
+# This file defines the services for your application for Render.
+# You can deploy all services at once by creating a "Blueprint"
+# in Render and pointing it to your Git repository.
 
 services:
-  # 1. PostgreSQL Database Service
+  # 1. PostgreSQL Database
   - type: psql
     name: blox-battles-db
-    plan: starter # Render's starter plan is suitable for production launch.
-    region: oregon # Choose the region closest to your users.
-    ipAllowList: [] # Allows access from any Render service, required for the backend.
-    postgresMajorVersion: 15
+    plan: starter # 'starter' is sufficient for most applications.
+    region: oregon # Or choose the region closest to you.
+    ipAllowList: [] # Allows access from any IP, suitable for Render services.
+    pga_version: "15" # Specify PostgreSQL version
 
   # 2. Backend Web Service (Node.js/Express)
   - type: web
@@ -21,7 +21,7 @@ services:
     rootDir: backend
     buildCommand: npm install
     startCommand: node server.js
-    healthCheckPath: /api/status
+    healthCheckPath: /api/status # A simple endpoint to check if the server is up.
     envVars:
       - key: NODE_ENV
         value: production
@@ -31,11 +31,10 @@ services:
           name: blox-battles-db
           property: connectionString
       - key: SERVER_URL
-        value: https://blox-battles-app.onrender.com # Your frontend's public URL
-      # --- [SECURE] Path to the secret file containing the private key ---
-      - key: PAYOUT_WALLET_PRIVATE_KEY_PATH
-        value: /etc/secrets/payout_wallet_private_key
-      # --- All other secrets will be added via the Render Dashboard ---
+        value: https://blox-battles-app.onrender.com
+      # --- Secrets ---
+      # These should be set in the Render Dashboard under Environment.
+      # Do NOT commit these to your repository.
       - key: JWT_SECRET
         sync: false
       - key: SESSION_SECRET
@@ -46,11 +45,23 @@ services:
         sync: false
       - key: BOT_API_KEY
         sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: ADMIN_TEST_API_KEY
+        sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
       - key: ALCHEMY_POLYGON_URL
+        sync: false
+      - key: ALCHEMY_API_KEY
+        sync: false
+      - key: MASTER_XPUB
+        sync: false
+      - key: PAYOUT_WALLET_PRIVATE_KEY
         sync: false
 
   # 3. Frontend Static Site (React/Vite)
@@ -62,12 +73,14 @@ services:
     rootDir: frontend
     buildCommand: npm install && npm run build
     publishDir: dist
+    # Rewrite rule for single-page applications (like React Router)
+    # This ensures that refreshing on any client-side route works correctly.
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
       - key: VITE_API_BASE_URL
-        value: https://blox-battles-api.onrender.com/api # The public URL of your new backend
+        value: https://blox-battles-api.onrender.com/api
       - key: VITE_STRIPE_PUBLISHABLE_KEY
-        sync: false
+        sync: false # Set this as a secret in the Render Dashboard
