@@ -1,145 +1,84 @@
 // backend/routes/auth.js
-// This file handles user authentication, registration, and session management.
-
 const express = require('express');
-const router = express.Router();
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const passport = require('passport');
-const { body } = require('express-validator');
-const { handleValidationErrors, validatePassword } = require('../middleware/auth');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const jwt = require('jsonwebtoken');
 const db = require('../database/database');
-const crypto = require('crypto');
+const router = express.Router();
 
-const jwtSecret = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET;
+const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3000';
 
-// --- Local Registration ---
-// [MODIFIED] Added a check to prevent re-registration of terminated accounts.
-router.post('/register',
-    [
-        body('email').isEmail().withMessage('Please enter a valid email.').normalizeEmail(),
-        body('password').custom(value => {
-            const validation = validatePassword(value);
-            if (!validation.valid) {
-                throw new Error(validation.message);
-            }
-            return true;
-        })
-    ],
-    handleValidationErrors,
-    async (req, res) => {
-        const { email, password } = req.body;
-        try {
-            const existingUser = await db.get('SELECT * FROM users WHERE email = ?', [email]);
-            
-            // [NEW] If a user exists and is terminated, block the registration permanently.
-            if (existingUser && existingUser.status === 'terminated') {
-                return res.status(403).json({ message: 'This email is associated with a terminated account and cannot be used again.' });
-            }
+// Passport configuration for Google OAuth
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: `${SERVER_URL}/api/auth/google/callback` // Use the environment variable
+  },
+  async (accessToken, refreshToken, profile, done) => {
+    const { id, displayName, emails, photos } = profile;
+    const email = emails[0].value;
+    const avatarUrl = photos[0].value;
 
-            if (existingUser) {
-                return res.status(409).json({ message: 'An account with this email already exists.' });
-            }
+    try {
+      let user = await db.oneOrNone('SELECT * FROM users WHERE google_id = $1', [id]);
 
-            const hashedPassword = await bcrypt.hash(password, 10);
-            const newUserId = crypto.randomUUID();
-            
-            await db.run('INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)', [newUserId, email, hashedPassword]);
-            
-            const newUser = await db.get('SELECT * FROM users WHERE id = ?', [newUserId]);
-
-            const payload = {
-                userId: newUser.id,
-                email: newUser.email,
-                username: newUser.email,
-                isAdmin: newUser.is_admin
-            };
-
-            const token = jwt.sign(payload, jwtSecret, { expiresIn: '1d' });
-            
-            res.status(201).json({ message: 'User registered successfully!', token: token });
-
-        } catch (error) {
-            console.error('Registration error:', error);
-            res.status(500).json({ message: 'An internal server error occurred.' });
+      if (user) {
+        // If user exists, update their avatar if it has changed
+        if (user.avatar_url !== avatarUrl) {
+          await db.none('UPDATE users SET avatar_url = $1 WHERE id = $2', [avatarUrl, user.id]);
         }
+        return done(null, user);
+      } else {
+        // If user does not exist, create a new one
+        const newUser = await db.one(
+          'INSERT INTO users (google_id, username, email, avatar_url, gems) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+          [id, displayName, email, avatarUrl, 0] // Start new users with 0 gems
+        );
+        return done(null, newUser);
+      }
+    } catch (error) {
+      console.error('Error in Google OAuth strategy:', error);
+      return done(error, null);
     }
-);
+  }
+));
 
-// --- Local Login ---
-// [MODIFIED] Added a check to prevent banned or terminated users from logging in.
-router.post('/login',
-    [
-        body('email').isEmail().normalizeEmail(),
-        body('password').notEmpty()
-    ],
-    handleValidationErrors,
-    async (req, res) => {
-        const { email, password } = req.body;
-        try {
-            const user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
-            if (!user || !user.password_hash) {
-                return res.status(401).json({ message: 'Incorrect email or password.' });
-            }
+// Route to initiate Google OAuth
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-            // [NEW] Check the user's status before proceeding with login.
-            if (user.status !== 'active') {
-                if (user.status === 'banned') {
-                    return res.status(403).json({ message: 'This account is currently banned.' });
-                }
-                if (user.status === 'terminated') {
-                    return res.status(403).json({ message: 'This account has been terminated.' });
-                }
-                return res.status(403).json({ message: 'This account is not active.' });
-            }
-
-            const isMatch = await bcrypt.compare(password, user.password_hash);
-            if (!isMatch) {
-                return res.status(401).json({ message: 'Incorrect email or password.' });
-            }
-            
-            const payload = {
-                userId: user.id,
-                email: user.email,
-                username: user.linked_roblox_username || user.email,
-                isAdmin: user.is_admin
-            };
-
-            const token = jwt.sign(payload, jwtSecret, { expiresIn: '1d' });
-            res.json({ token, username: payload.username });
-        } catch (error) {
-            console.error('Login error:', error);
-            res.status(500).json({ message: 'An internal server error occurred.' });
-        }
-    }
-);
-
-// --- Google OAuth Routes ---
-router.get('/google',
-    passport.authenticate('google', { scope: ['profile', 'email'] })
-);
-
+// Google OAuth callback route
 router.get('/google/callback',
-    passport.authenticate('google', { failureRedirect: '/', session: false }),
-    (req, res) => {
-        // Successful authentication
-        const payload = {
-            userId: req.user.id,
-            email: req.user.email,
-            username: req.user.linked_roblox_username || req.user.email,
-            isAdmin: req.user.is_admin
-        };
+  passport.authenticate('google', { failureRedirect: '/login', session: false }),
+  (req, res) => {
+    // On successful authentication, create a JWT
+    const user = req.user;
+    const token = jwt.sign({
+      id: user.id,
+      username: user.username,
+      isAdmin: user.is_admin,
+      isModerator: user.is_moderator,
+    }, JWT_SECRET, { expiresIn: '7d' });
 
-        const token = jwt.sign(payload, jwtSecret, { expiresIn: '1d' });
-
-        const frontendUrl = process.env.SERVER_URL || 'http://localhost:3000';
-        res.redirect(`${frontendUrl}/?token=${token}`);
-    }
+    // Redirect user to the frontend with the token
+    res.redirect(`${SERVER_URL}/dashboard?token=${token}`);
+  }
 );
 
-// --- Logout ---
-router.post('/logout', (req, res) => {
-    res.status(200).json({ message: 'Logout handled client-side.' });
+// Route to verify a JWT token from the client
+router.get('/verify', (req, res) => {
+    const token = req.headers.authorization?.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ message: 'No token provided.' });
+    }
+
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(401).json({ message: 'Failed to authenticate token.' });
+        }
+        res.status(200).json({ message: 'Token is valid.', user: decoded });
+    });
 });
 
 module.exports = router;
