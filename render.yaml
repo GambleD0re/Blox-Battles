@@ -5,12 +5,12 @@
 
 services:
   # 1. PostgreSQL Database
-  - type: psql
+  - type: postgresql      # ← was psql
     name: blox-battles-db
-    plan: starter # 'starter' is sufficient for most applications.
-    region: oregon # Or choose the region closest to you.
-    ipAllowList: [] # Allows access from any IP, suitable for Render services.
-    pga_version: "15" # Specify PostgreSQL version
+    plan: starter
+    region: oregon
+    version: "15"         # ← use 'version' rather than 'pga_version'
+    ipAllowList: []       # allows any IP (for your Render services)
 
   # 2. Backend Web Service (Node.js/Express)
   - type: web
