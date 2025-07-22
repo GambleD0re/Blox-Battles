@@ -1,107 +1,111 @@
 // backend/services/cryptoPayoutService.js
-// This service handles direct interaction with the blockchain for sending cryptocurrency payouts.
-// WARNING: This module directly handles a private key. Extreme care must be taken to secure it.
-
-const ethers = require('ethers');
+const { ethers } = require('ethers');
+const fs = require('fs');
+const path = require('path');
+const db = require('../database/database');
+const { getMaticPrice } = require('./priceFeedService');
 
 // --- Configuration ---
 const ALCHEMY_POLYGON_URL = process.env.ALCHEMY_POLYGON_URL;
-const PAYOUT_WALLET_PRIVATE_KEY = process.env.PAYOUT_WALLET_PRIVATE_KEY;
+const provider = new ethers.providers.JsonRpcProvider(ALCHEMY_POLYGON_URL);
 
-// [MODIFIED] Configuration object for supported ERC-20 tokens on the Polygon MAINNET.
-const SUPPORTED_TOKENS = {
-    'USDC': {
-        // Official Polygon Mainnet USDC Address
-        contractAddress: '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359',
-        decimals: 6
-    },
-    'USDT': {
-        // Official Polygon Mainnet USDT Address
-        contractAddress: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f',
-        decimals: 6
+// --- [SECURE] Hot Wallet Private Key Handling ---
+// The private key is no longer read from a standard environment variable.
+// Instead, we read it from a file path specified by an environment variable.
+// Render's "Secret File" feature will create this file for us at the specified path.
+const PAYOUT_WALLET_PRIVATE_KEY_PATH = process.env.PAYOUT_WALLET_PRIVATE_KEY_PATH;
+let payoutWallet;
+
+if (!PAYOUT_WALLET_PRIVATE_KEY_PATH) {
+    console.error("FATAL: PAYOUT_WALLET_PRIVATE_KEY_PATH environment variable is not set.");
+    // In a real scenario, you might want to prevent the app from starting.
+} else {
+    try {
+        // Read the private key from the secure file.
+        const privateKey = fs.readFileSync(PAYOUT_WALLET_PRIVATE_KEY_PATH, 'utf8').trim();
+        payoutWallet = new ethers.Wallet(privateKey, provider);
+        console.log("Successfully loaded payout wallet from secure path. Address:", payoutWallet.address);
+    } catch (error) {
+        console.error("FATAL: Could not read private key from file path:", PAYOUT_WALLET_PRIVATE_KEY_PATH, error);
+        // Prevent the application from running without a valid wallet.
+        payoutWallet = null;
     }
-};
+}
 
-const ERC20_ABI = [
-    "function transfer(address to, uint256 amount) returns (bool)",
+
+// Mock ERC20 ABI for interacting with stablecoin contracts (USDC, USDT)
+const erc20Abi = [
+    "function transfer(address to, uint256 amount)",
+    "function balanceOf(address owner) view returns (uint256)",
     "function decimals() view returns (uint8)"
 ];
 
-// --- Service State ---
-let provider;
-let wallet;
-let isInitialized = false;
+// Polygon Mainnet addresses for common stablecoins
+const TOKEN_ADDRESSES = {
+    'USDC': '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
+    'USDT': '0xc2132D05D31c914a87C6611C10748AEb04B58e8F'
+};
 
 /**
- * Initializes the blockchain provider and wallet signer on demand.
- */
-async function ensureInitialized() {
-    if (isInitialized) {
-        return;
-    }
-
-    console.log("Attempting to initialize Crypto Payout Service for MAINNET...");
-
-    if (!ALCHEMY_POLYGON_URL || !PAYOUT_WALLET_PRIVATE_KEY) {
-        throw new Error("Missing required crypto environment variables in .env file.");
-    }
-
-    try {
-        provider = new ethers.JsonRpcProvider(ALCHEMY_POLYGON_URL);
-        wallet = new ethers.Wallet(PAYOUT_WALLET_PRIVATE_KEY, provider);
-        
-        isInitialized = true;
-        console.log(`Crypto Payout Service Initialized Successfully for MAINNET. Wallet Address: ${wallet.address}`);
-
-    } catch (error) {
-        isInitialized = false;
-        console.error("Failed to initialize Crypto Payout Service on demand:", error);
-        throw new Error("Could not connect to the blockchain network. Please try again later.");
-    }
-}
-
-/**
- * Sends a specified amount of a given token to a recipient address.
- * @param {string} recipientAddress The destination wallet address.
- * @param {number} amountUsd The amount of USD to send.
- * @param {string} tokenType The type of token to send ('USDC' or 'USDT').
+ * Executes a payout to a user's specified crypto address.
+ * @param {number} userId - The ID of the user requesting the payout.
+ * @param {string} destinationAddress - The destination wallet address.
+ * @param {number} amountGems - The amount of gems to be paid out.
+ * @param {string} tokenSymbol - The symbol of the token to pay out (e.g., 'USDC').
  * @returns {Promise<string>} The transaction hash of the successful payout.
  */
-async function sendCryptoPayout(recipientAddress, amountUsd, tokenType) {
-    await ensureInitialized();
-
-    const tokenConfig = SUPPORTED_TOKENS[tokenType];
-    if (!tokenConfig) {
-        throw new Error(`Unsupported token type: ${tokenType}`);
+async function executePayout(userId, destinationAddress, amountGems, tokenSymbol = 'USDC') {
+    if (!payoutWallet) {
+        throw new Error("Payout wallet is not initialized. Cannot process payouts.");
+    }
+    if (!ethers.utils.isAddress(destinationAddress)) {
+        throw new Error("Invalid destination address provided.");
+    }
+    if (!TOKEN_ADDRESSES[tokenSymbol]) {
+        throw new Error(`Unsupported token symbol: ${tokenSymbol}`);
     }
 
-    if (!ethers.isAddress(recipientAddress)) {
-        throw new Error("Invalid recipient address provided.");
+    const tokenAddress = TOKEN_ADDRESSES[tokenSymbol];
+    const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, payoutWallet);
+    const decimals = await tokenContract.decimals();
+
+    // Assuming 1 gem = $0.01 (1 cent)
+    const amountUSD = amountGems / 100;
+    const amountTokens = ethers.utils.parseUnits(amountUSD.toString(), decimals);
+
+    console.log(`Processing payout for user ${userId}:`);
+    console.log(`  - Gems: ${amountGems}`);
+    console.log(`  - USD Value: $${amountUSD.toFixed(2)}`);
+    console.log(`  - Token: ${tokenSymbol}`);
+    console.log(`  - Destination: ${destinationAddress}`);
+    console.log(`  - Amount in token units (${decimals} decimals): ${amountTokens.toString()}`);
+
+
+    // Check if the hot wallet has sufficient balance
+    const balance = await tokenContract.balanceOf(payoutWallet.address);
+    if (balance.lt(amountTokens)) {
+        console.error(`Insufficient funds in payout wallet for ${tokenSymbol}.`);
+        console.error(`  - Required: ${amountTokens.toString()}`);
+        console.error(`  - Available: ${balance.toString()}`);
+        // Here you would trigger an alert to the platform administrators.
+        throw new Error("Insufficient funds in the payout wallet to process this transaction. The team has been notified.");
     }
 
-    try {
-        const contract = new ethers.Contract(tokenConfig.contractAddress, ERC20_ABI, wallet);
-        const decimals = tokenConfig.decimals;
-        const amountInSmallestUnit = ethers.parseUnits(amountUsd.toString(), decimals);
+    // Estimate gas price
+    const gasPrice = await provider.getGasPrice();
+    
+    // Execute the transfer
+    const tx = await tokenContract.transfer(destinationAddress, amountTokens, {
+        gasPrice: gasPrice.mul(12).div(10) // Add 20% buffer to gas price
+    });
 
-        console.log(`Attempting to send ${amountUsd} ${tokenType} (${amountInSmallestUnit.toString()} units) to ${recipientAddress} on MAINNET.`);
+    console.log(`Payout transaction sent. Hash: ${tx.hash}`);
+    
+    // Wait for the transaction to be mined
+    await tx.wait();
+    console.log(`Payout transaction confirmed. Hash: ${tx.hash}`);
 
-        // Estimate gas for the transaction to ensure it's viable
-        await contract.transfer.estimateGas(recipientAddress, amountInSmallestUnit);
-        
-        // Execute the transfer.
-        const tx = await contract.transfer(recipientAddress, amountInSmallestUnit);
-
-        console.log(`${tokenType} MAINNET Payout transaction sent. Hash: ${tx.hash}`);
-        
-        return tx.hash;
-
-    } catch (error) {
-        console.error(`${tokenType} Payout Failed for address ${recipientAddress}:`, error);
-        throw new Error(`Failed to process the ${tokenType} payout. The user's gems have not been debited.`);
-    }
+    return tx.hash;
 }
 
-module.exports = {
-    sendCryptoPayout
-};
+module.exports = { executePayout };
