@@ -5,19 +5,19 @@ const express = require('express');
 const cors = require('cors');
 const passport = require('passport');
 const cookieParser = require('cookie-parser');
-const morgan = require('morgan'); // FIX: Correctly require the morgan package
+const morgan = require('morgan');
 const webpush = require('web-push');
-const path = require('path'); // NEW: Import the path module for robust pathing
+const path = require('path');
 const util = require('util');
 const crypto = require('crypto');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-// --- FIX: Use absolute paths for local module imports ---
-const db = require(path.join(__dirname, 'database', 'database.js'));
-const { botLogger } = require(path.join(__dirname, 'middleware', 'botLogger.js'));
-const { startTransactionListener } = require(path.join(__dirname, 'services', 'transactionListenerService.js'));
-const { startConfirmationService } = require(path.join(__dirname, 'services', 'transactionConfirmationService.js'));
+// --- FIX: Use relative paths from the 'backend' root directory ---
+const db = require('./database/database.js');
+const { botLogger } = require('./middleware/botLogger.js');
+const { startTransactionListener } = require('./services/transactionListenerService.js');
+const { startConfirmationService } = require('./services/transactionConfirmationService.js');
 
 db.get = util.promisify(db.get);
 db.run = util.promisify(db.run);
@@ -136,7 +136,7 @@ passport.use(new GoogleStrategy({
 ));
 
 // --- API Routes ---
-const apiRoutes = require(path.join(__dirname, 'routes', 'index.js'));
+const apiRoutes = require('./routes/index.js');
 app.use('/api', botLogger, apiRoutes);
 
 // --- Server Startup ---
