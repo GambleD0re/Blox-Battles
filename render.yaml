@@ -2,15 +2,15 @@ databases:
   - name: blox-battles-db
     postgresMajorVersion: "15"
     region: oregon
-    plan: starter
+    plan: basic-1gb
     ipAllowList: []
 
 services:
   - type: web
     runtime: node
     name: blox-battles-api
-    region: oregon
     plan: starter
+    region: oregon
     rootDir: backend
     buildCommand: npm install
     startCommand: node server.js
@@ -56,7 +56,6 @@ services:
   - type: web
     runtime: static
     name: blox-battles-app
-    plan: starter
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
