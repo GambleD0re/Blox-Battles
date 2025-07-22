@@ -1,20 +1,23 @@
 # render.yaml
 # Blueprint for: database + web service + static site
 
-databases:
-  - name: blox-battles-db
-    postgresMajorVersion: "15"
-    region: oregon
+services:
+  # 1) Managed Postgres database
+  - type: postgres
+    name: blox-battles-db
     plan: basic-1gb
+    region: oregon
+    version: "15"
     ipAllowList: []
 
-web_services:
-  - name: blox-battles-api
-    environment: node
+  # 2) Node/Express API
+  - type: web
+    name: blox-battles-api
+    env: node
     branch: main
-    rootDirectory: backend
-    region: oregon
+    rootDir: backend
     plan: starter
+    region: oregon
     buildCommand: npm install
     startCommand: node server.js
     healthCheckPath: /api/status
@@ -56,12 +59,13 @@ web_services:
       - key: PAYOUT_WALLET_PRIVATE_KEY
         sync: false
 
-static_sites:
-  - name: blox-battles-app
+  # 3) React/Vite frontend as a static site
+  - type: static
+    name: blox-battles-app
     branch: main
-    rootDirectory: frontend
+    rootDir: frontend
     buildCommand: npm install && npm run build
-    publishPath: dist
+    publishDir: dist
     routes:
       - type: rewrite
         source: /*
