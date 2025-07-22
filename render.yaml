@@ -1,7 +1,5 @@
 # render.yaml
-#
-# One databases: block, one services: block
-# services can be of type web, static, etc.
+# Blueprint for: database + web service + static site
 
 databases:
   - name: blox-battles-db
@@ -11,6 +9,7 @@ databases:
     ipAllowList: []
 
 services:
+  # 1) Node/Express API
   - type: web
     name: blox-battles-api
     runtime: node
@@ -59,8 +58,10 @@ services:
       - key: PAYOUT_WALLET_PRIVATE_KEY
         sync: false
 
-  - type: static
+  # 2) React/Vite frontend as a static site
+  - type: web                    # static sites are still 'web' services
     name: blox-battles-app
+    runtime: static             # <-- this marks it as a static site :contentReference[oaicite:0]{index=0}
     branch: main
     rootDirectory: frontend
     buildCommand: npm install && npm run build
