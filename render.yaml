@@ -58,7 +58,7 @@ services:
       - key: PAYOUT_WALLET_PRIVATE_KEY
         sync: false
 
-  # 2) React/Vite frontend as a Static Site
+  # 2) React/Vite frontend as a Static Site 
   - type: web
     name: blox-battles-app
     runtime: static            # Marks it as a static site :contentReference[oaicite:1]{index=1}
