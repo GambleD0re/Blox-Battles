@@ -5,17 +5,17 @@ const express = require('express');
 const cors = require('cors');
 const passport = require('passport');
 const cookieParser = require('cookie-parser');
-const morgan = require('morgan');
+const morgan = 'morgan';
 const webpush = require('web-push');
-const db = require('./database/database');
+const db = require('./database/database.js'); // FIX: Added .js extension
 const util = require('util');
 const crypto = require('crypto');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const { botLogger } = require('./middleware/botLogger');
+const { botLogger } = require('./middleware/botLogger.js'); // FIX: Added .js extension
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-const { startTransactionListener } = require('./services/transactionListenerService');
-const { startConfirmationService } = require('./services/transactionConfirmationService');
+const { startTransactionListener } = require('./services/transactionListenerService.js');
+const { startConfirmationService } = require('./services/transactionConfirmationService.js');
 
 db.get = util.promisify(db.get);
 db.run = util.promisify(db.run);
@@ -135,7 +135,7 @@ passport.use(new GoogleStrategy({
 ));
 
 // --- API Routes ---
-const apiRoutes = require('./routes');
+const apiRoutes = require('./routes/index.js'); // FIX: Added /index.js for clarity
 app.use('/api', botLogger, apiRoutes);
 
 // --- Server Startup ---
