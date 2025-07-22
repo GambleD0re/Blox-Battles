@@ -1,7 +1,7 @@
 // src/services/api.js
 // This file centralizes all API calls to the backend.
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 // A helper function to handle fetch requests, including authentication.
 const apiRequest = async (endpoint, method = 'GET', body = null, token = null) => {
