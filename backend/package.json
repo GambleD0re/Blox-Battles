@@ -4,7 +4,8 @@
   "description": "Backend for Blox Battles website",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "postinstall": "node setup.js"
   },
   "dependencies": {
     "alchemy-sdk": "^3.6.1",
