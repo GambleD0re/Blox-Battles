@@ -7,7 +7,7 @@
 databases:
   - name: blox-battles-db
     postgresMajorVersion: "15" 
-    plan: basic-256mb # UPDATED: Moved to the lowest paid database tier.
+    plan: basic-256mb
 
 services:
   # 1. Backend API Service (Node.js / Express)
@@ -15,7 +15,7 @@ services:
     name: blox-battles-api 
     env: node
     rootDir: ./backend
-    plan: starter # UPDATED: Moved to the lowest paid web service tier.
+    plan: starter
     buildCommand: npm install
     startCommand: node server.js
     healthCheckPath: /api/status
@@ -29,11 +29,9 @@ services:
       - key: BASE_URL
         value: "https://blox-battles-api.onrender.com"
 
+      # CORRECTED: The public URL of the frontend must be set statically.
       - key: FRONTEND_URL
-        fromService:
-          type: web 
-          name: blox-battles-frontend
-          property: url
+        value: "https://blox-battles-frontend.onrender.com"
       
       # --- Application Secrets (MUST be set in Render Dashboard) ---
       - key: JWT_SECRET
@@ -64,18 +62,15 @@ services:
         sync: false
       - key: ALCHEMY_POLYGON_URL
         sync: false
-
-      # --- Public Keys (Safe to store here) ---
       - key: VAPID_PUBLIC_KEY
-        value: BOJ9GsdK-bsA2As5Gz5vDhmOadunLYOv7crFN87B2S3oThChqdse33le0H9kUMwBEVjDjJvGbvUQLnxxzHcQNJ8
+        sync: false
       - key: VITE_STRIPE_PUBLISHABLE_KEY
-        value: pk_test_51RlQKOQY4V3Boe3I209Q0Z6cxmV1erjwaNRjbtoMdSsMMUoyvUXLZFNttt3g9fat01ZeqhxyokgghMJFwxtng2HB00u53r7ngQ
-
+        sync: false
+        
   # 2. Frontend Static Site (React / Vite)
   - type: web 
     name: blox-battles-frontend
     runtime: static 
-    # UPDATED: Removed the 'plan' key as it's not applicable to static sites.
     rootDir: ./frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist 
