@@ -1,6 +1,6 @@
-# v1
-# This version introduces a proxy rewrite rule for the frontend service,
-# which is a more robust and secure way to handle API requests.
+# v2
+# This version removes optional VAPID keys for push notifications
+# and the ADMIN_TEST_API_KEY to simplify production configuration.
 # =================================================================
 
 # --- Database Definition ---
@@ -42,12 +42,6 @@ services:
         sync: false
       - key: BOT_API_KEY
         sync: false
-      - key: VAPID_PUBLIC_KEY
-        sync: false
-      - key: VAPID_PRIVATE_KEY
-        sync: false
-      - key: ADMIN_TEST_API_KEY
-        sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
@@ -63,7 +57,7 @@ services:
       - key: VITE_STRIPE_PUBLISHABLE_KEY
         sync: false
 
-  # --- Frontend Web Service (Corrected Syntax) ---
+  # --- Frontend Web Service ---
   - type: web
     name: blox_battles_web
     runtime: static
@@ -71,16 +65,12 @@ services:
     buildCommand: "npm install && npm run build"
     staticPublishPath: "./dist"
     routes:
-      # This rule proxies API requests to the backend, avoiding CORS issues.
-      # It must come before the SPA rewrite rule.
       - type: rewrite
         source: /api/:path*
         destination: https://blox_battles_api.onrender.com/api/:path*
-      # This rule handles client-side routing for the SPA.
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
-      # VITE_API_URL is no longer needed as we are using a rewrite rule.
       - key: VITE_STRIPE_PUBLISHABLE_KEY
         sync: false
