@@ -97,7 +97,7 @@ services:
   # --------------------
   #  Frontend Web Service
   # --------------------
-  - type: static_site
+  - type: static
     name: blox_battles_web
     env: static
     rootDir: ./frontend
