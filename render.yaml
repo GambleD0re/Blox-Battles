@@ -11,7 +11,7 @@
 # Databases are defined in their own top-level block.
 databases:
   - name: blox_battles_db
-    plan: Basic-250mb # Use the lowest paid tier for the database.
+    plan: basic-250mb # Use the lowest paid tier for the database.
     region: oregon # You can change this to a region closer to you.
 
 # --- Service Definitions ---
@@ -28,8 +28,7 @@ services:
     healthCheckPath: /api/status
     envVars:
       - key: DATABASE_URL
-        fromService:
-          type: psql
+        fromDatabase:
           name: blox_battles_db
           property: connectionString
       - key: NODE_VERSION
