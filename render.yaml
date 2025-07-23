@@ -1,15 +1,9 @@
+# v1
+# This version introduces a proxy rewrite rule for the frontend service,
+# which is a more robust and secure way to handle API requests.
 # =================================================================
-#        Render Blueprint for Blox Battles (Final Version)
-# =================================================================
-#
-# This version is corrected according to the official Render Blueprint
-# documentation provided in the screenshots. It uses the correct syntax
-# for both the database and the static site frontend.
-#
-
 
 # --- Database Definition ---
-# Databases are defined in their own top-level block.
 databases:
   - name: blox_battles_db
     postgresMajorVersion: "15"
@@ -33,14 +27,11 @@ services:
           property: connectionString
       - key: NODE_VERSION
         value: "18.17.1"
-      # These URLs are based on the service names defined in this file.
       - key: SERVER_URL # Frontend URL
         value: https://blox_battles_web.onrender.com
       - key: BACKEND_URL # This service's own URL
         value: https://blox_battles_api.onrender.com
-      # ---
       # --- SECRET & SENSITIVE VARIABLES (Set these in Render Dashboard) ---
-      # ---
       - key: JWT_SECRET
         sync: false
       - key: SESSION_SECRET
@@ -80,13 +71,16 @@ services:
     buildCommand: "npm install && npm run build"
     staticPublishPath: "./dist"
     routes:
+      # This rule proxies API requests to the backend, avoiding CORS issues.
+      # It must come before the SPA rewrite rule.
+      - type: rewrite
+        source: /api/:path*
+        destination: https://blox_battles_api.onrender.com/api/:path*
+      # This rule handles client-side routing for the SPA.
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
-      # CORRECTED: The backend URL is explicitly defined.
-      # The 'fromService' directive does not support the 'url' property for web services.
-      - key: VITE_API_URL
-        value: https://blox_battles_api.onrender.com
+      # VITE_API_URL is no longer needed as we are using a rewrite rule.
       - key: VITE_STRIPE_PUBLISHABLE_KEY
         sync: false
