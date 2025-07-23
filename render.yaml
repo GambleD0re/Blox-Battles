@@ -11,16 +11,19 @@
 # All service names have been updated to use 'blox_battles' as requested.
 #
 
-services:
-  # ------------------
-  #  Database Service
-  # ------------------
-  - type: psql
-    name: blox_battles_db
-    plan: Basic-250mb
-    ipAllowList: [] # Allows all IPs to connect. Recommended to restrict this in the Render dashboard later.
+# ------------------
+#  Database Service
+# ------------------
+databases:
+  - name: blox-battles-db
+    plan: Basic-250mb # 'starter' is sufficient for most applications.
+    region: oregon
+    ipAllowList: [] # Allows access from any IP, suitable for Render services.
+    postgresMajorVersion: 15
     pgaUpgrade:
       enabled: false
+
+services:
 
   # ------------------
   #  Backend API Service
