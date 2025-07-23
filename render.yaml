@@ -1,91 +1,87 @@
-# =================================================================
-# Render Blueprint for the Blox-Battles Monorepo Application
-#
-# This file defines the complete infrastructure for the project, including:
-#   1. A PostgreSQL database for the backend.
-#   2. A Node.js/Express backend web service.
-#   3. A Vite/React frontend static site.
-#
-# This Blueprint correctly handles the monorepo structure by using
-# the `rootDir` property for each service.
-# =================================================================
-
-databases:
-  # Defines the PostgreSQL database for the application.
-  - name: blox-battles-db
-    plan: free # Specifies the free-tier plan. Upgrade as needed (e.g., 'starter').
-    region: oregon # IMPORTANT: Choose the region closest to your users.
-                   # All services should be in the same region as the database for low latency.
+# render.yaml
+# Blueprint for deploying the Blox Battles application on Render.
+# This file specifies the services, databases, and environment configurations
+# required to run the full-stack application.
+# Last Updated: 2025-07-23
 
 services:
-  # -----------------------------------------------------------------
-  # Backend Service (Node.js + Express)
-  # -----------------------------------------------------------------
+  # 1. PostgreSQL Database
+  # This service provisions a managed PostgreSQL database for the application.
+  # It is defined first so other services can reference it.
+  - type: pserv
+    name: blox-battles-db
+    # Render will automatically use the latest major version of PostgreSQL.
+    # You can specify a version if needed, e.g., postgresql: "15"
+    # The database name will be 'blox_battles_db' by default.
+    # Disk size can be specified if the default is insufficient.
+    disk:
+      name: postgres-data
+      sizeGB: 1
+
+  # 2. Backend API Service (Node.js / Express)
+  # This is the main web service that runs the backend logic.
   - type: web
-    name: blox-battles-backend
-    runtime: node # Specifies the Node.js runtime environment.
-    region: oregon # Must match the database region.
-    branch: main # Specifies the Git branch to deploy from (can be 'master').
-    
-    # --- Monorepo Configuration ---
-    # This is the most critical setting for the backend. It tells Render
-    # to run all commands from within the 'backend' directory.
-    rootDir: backend
-
-    # --- Build and Start Commands ---
-    # These commands are executed relative to the `rootDir`.
-    buildCommand: "npm install" # Installs dependencies from backend/package.json.
-    startCommand: "npm start" # Runs the start script from backend/package.json.
-
-    # --- Environment Variables ---
-    # This section securely configures the application's environment.
+    name: bloxbatttles-api # Name matches the URL in the bot script
+    env: node
+    # The root directory of the backend code.
+    rootDir: ./backend
+    # Specifies the runtime version. It's good practice to match your local dev environment.
+    plan: free # Or your preferred instance type, e.g., "starter"
+    # Commands to build and start the service.
+    buildCommand: npm install
+    startCommand: node server.js
+    # Health check endpoint to ensure the service is running correctly.
+    healthCheckPath: /api/status
+    # Environment variables required by the backend.
     envVars:
-      - key: NODE_ENV
-        value: production # Optimizes Node.js/Express for performance and security.
+      # The DATABASE_URL is automatically injected from the database service defined above.
       - key: DATABASE_URL
         fromDatabase:
-          # Injects the connection string from the database defined above.
-          # This avoids hardcoding credentials.
           name: blox-battles-db
           property: connectionString
-      - key: CRYPTO_PAYOUT_KEY_PATH
-        # Defines a path to a secret file that will be managed in the Render Dashboard.
-        # The application code will read the private key from this file path.
-        value: /etc/secrets/payout-private-key
-
-  # -----------------------------------------------------------------
-  # Frontend Service (Vite + React Static Site)
-  # -----------------------------------------------------------------
-  - type: web
-    name: blox-battles-frontend
-    runtime: static # CRITICAL: Tells Render to deploy this as a static site on its CDN.
-    region: oregon # Must match the other services' region.
-    branch: main # Specifies the Git branch to deploy from.
-
-    # --- Monorepo Configuration ---
-    # This is the most critical setting for the frontend. It tells Render
-    # to run all commands from within the 'frontend' directory.
-    rootDir: frontend
-
-    # --- Build and Publish Settings ---
-    # These commands and paths are relative to the `rootDir`.
-    buildCommand: "npm install && npm run build" # Installs dependencies and builds the static assets.
-    publishDir: "dist" # The output directory for the Vite build (frontend/dist).
-
-    # --- Environment Variables (for build time) ---
-    # This demonstrates how to pass the backend URL to the React app during the build process.
-    # This allows the frontend to know the API endpoint without hardcoding it.
-    envVars:
-      - key: VITE_API_URL # Vite exposes env vars prefixed with VITE_ to the app.
+      # The BASE_URL is the public URL of this service, used for generating links.
+      - key: BASE_URL
         fromService:
           type: web
-          name: blox-battles-backend
+          name: bloxbatttles-api
           property: url
+      # The FRONTEND_URL is the public URL of the frontend service.
+      - key: FRONTEND_URL
+        fromService:
+          type: static
+          name: blox-battles-frontend
+          property: url
+      # These are secret keys. You MUST set these in the Render dashboard.
+      # Setting 'sync: false' prevents them from being committed to your repo.
+      - key: JWT_SECRET
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: BOT_API_KEY
+        sync: false
+      - key: ADMIN_API_KEY # For securing admin endpoints
+        sync: false
 
-    # --- Routing Configuration for Single-Page Applications (SPAs) ---
-    # This rule is essential for React Router or other client-side routing libraries.
-    # It ensures that all requests to non-asset paths are redirected to index.html,
-    # allowing the React app to handle the routing.
-    rewrites:
-      - source: "/*"
-        destination: "/index.html"
+  # 3. Frontend Static Site (React / Vite)
+  # This service builds and serves the static frontend application.
+  - type: static
+    name: blox-battles-frontend
+    # The root directory of the frontend code.
+    rootDir: ./frontend
+    # Commands to build the static assets.
+    buildCommand: npm install && npm run build
+    # The directory where the built assets are located.
+    # Vite's default output directory is 'dist'.
+    publishPath: ./dist
+    # Rewrite rules are crucial for a single-page application (SPA) and for proxying API requests.
+    routes:
+      # This rule proxies all API requests made from the frontend to the backend service.
+      # This avoids CORS issues and hides the backend URL from the client.
+      - type: rewrite
+        source: /api/:path*
+        destination: https://bloxbatttles-api.onrender.com/api/:path*
+      # This rule ensures that all other requests are sent to index.html.
+      # This is standard for SPAs to allow client-side routing to work correctly.
+      - type: rewrite
+        source: /*
+        destination: /index.html
