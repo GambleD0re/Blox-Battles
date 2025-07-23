@@ -1,21 +1,14 @@
 // frontend/src/services/api.js
-// Version: 3
-//
-// This file centralizes all API calls to the backend. It configures
-// a single axios instance and exports all necessary API functions.
-// This version restores all required function exports to fix build errors.
+// Version: 4
+// This version removes the updateNotificationPreference function.
 
 import axios from 'axios';
 
-// The baseURL is a relative path. Render's rewrite rule will
-// catch any request starting with '/api' and forward it to the
-// backend service. This avoids CORS issues and hides the backend URL.
 const API = axios.create({
   baseURL: '/api',
   withCredentials: true,
 });
 
-// Interceptor to add the authorization token to every request if it exists.
 API.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -72,7 +65,7 @@ export const updateWithdrawalDetails = (requestId, details) => API.put(`/payouts
 export const updatePassword = (passwordData) => API.put('/user/password', passwordData);
 export const unlinkRoblox = () => API.post('/user/unlink/roblox');
 export const deleteAccount = (password) => API.delete('/user/delete/account', { data: { password } });
-export const updateNotificationPreference = (enabled) => API.put('/user/notification-preference', { enabled });
+// REMOVED: updateNotificationPreference function is no longer needed.
 
 // --- ADMIN ---
 export const getAdminStats = () => API.get('/admin/stats');
@@ -97,5 +90,4 @@ export const getAdminUserDetailsForPayout = (userId, payoutId) => API.get(`/admi
 export const approvePayoutRequest = (requestId) => API.post(`/admin/payout-requests/${requestId}/approve`);
 export const declinePayoutRequest = (requestId, reason) => API.post(`/admin/payout-requests/${requestId}/decline`, { reason });
 
-// We export the API instance itself as the default export
 export default API;
