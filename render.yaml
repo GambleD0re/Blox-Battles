@@ -4,83 +4,89 @@
 # required to run the full-stack application.
 # Last Updated: 2025-07-23
 
-services:
-  # 1. PostgreSQL Database
-  # This service provisions a managed PostgreSQL database for the application.
-  # It is defined first so other services can reference it.
-  - type: pserv
-    name: blox-battles-db
-    # Render will automatically use the latest major version of PostgreSQL.
-    # The database name will be 'blox_battles_db' by default.
-    disk:
-      name: postgres-data
-      sizeGB: 1
+databases:
+  - name: blox-battles-db
+    postgresMajorVersion: "15" 
+    plan: free 
 
-  # 2. Backend API Service (Node.js / Express)
-  # This is the main web service that runs the backend logic.
+services:
+  # 1. Backend API Service (Node.js / Express)
   - type: web
-    name: bloxbatttles-api # Name matches the URL in the bot script
+    name: bloxbatttles-api 
     env: node
-    # The root directory of the backend code.
     rootDir: ./backend
-    # Specifies the runtime version. It's good practice to match your local dev environment.
-    plan: free # Or your preferred instance type, e.g., "starter"
-    # Commands to build and start the service.
+    plan: free 
     buildCommand: npm install
     startCommand: node server.js
-    # Health check endpoint to ensure the service is running correctly.
     healthCheckPath: /api/status
-    # Environment variables required by the backend.
     envVars:
-      # The DATABASE_URL is automatically injected from the database service defined above.
+      # --- Render-Managed Variables ---
       - key: DATABASE_URL
         fromDatabase:
           name: blox-battles-db
           property: connectionString
-      # The BASE_URL is the public URL of this service, used for generating links.
       - key: BASE_URL
         fromService:
           type: web
           name: bloxbatttles-api
           property: url
-      # The FRONTEND_URL is the public URL of the frontend service.
       - key: FRONTEND_URL
         fromService:
           type: web 
           name: blox-battles-frontend
           property: url
-      # These are secret keys. You MUST set these in the Render dashboard.
-      # Setting 'sync: false' prevents them from being committed to your repo.
+      
+      # --- Application Secrets (MUST be set in Render Dashboard) ---
       - key: JWT_SECRET
         sync: false
       - key: SESSION_SECRET
         sync: false
       - key: BOT_API_KEY
         sync: false
-      - key: ADMIN_API_KEY # For securing admin endpoints
+      - key: ADMIN_API_KEY 
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: ADMIN_TEST_API_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: ALCHEMY_API_KEY
+        sync: false
+      - key: MASTER_XPUB
+        sync: false
+      - key: PAYOUT_WALLET_PRIVATE_KEY
+        sync: false
+      - key: ALCHEMY_POLYGON_URL
         sync: false
 
-  # 3. Frontend Static Site (React / Vite)
-  # This service builds and serves the static frontend application.
+      # --- Public Keys (Safe to store here) ---
+      - key: VAPID_PUBLIC_KEY
+        value: BOJ9GsdK-bsA2As5Gz5vDhmOadunLYOv7crFN87B2S3oThChqdse33le0H9kUMwBEVjDjJvGbvUQLnxxzHcQNJ8
+      - key: VITE_STRIPE_PUBLISHABLE_KEY
+        value: pk_test_51RlQKOQY4V3Boe3I209Q0Z6cxmV1erjwaNRjbtoMdSsMMUoyvUXLZFNttt3g9fat01ZeqhxyokgghMJFwxtng2HB00u53r7ngQ
+
+  # 2. Frontend Static Site (React / Vite)
   - type: web 
     name: blox-battles-frontend
     runtime: static 
-    # The root directory of the frontend code.
     rootDir: ./frontend
-    # Commands to build the static assets.
     buildCommand: npm install && npm run build
-    # The directory where the built assets are located.
-    # Vite's default output directory is 'dist'.
-    staticPublishPath: ./dist # CORRECTED: The key for static sites is 'staticPublishPath'.
-    # Rewrite rules are crucial for a single-page application (SPA) and for proxying API requests.
+    staticPublishPath: ./dist 
+    envVars:
+      # Pass the Stripe publishable key to the frontend build
+      - key: VITE_STRIPE_PUBLISHABLE_KEY
+        value: pk_test_51RlQKOQY4V3Boe3I209Q0Z6cxmV1erjwaNRjbtoMdSsMMUoyvUXLZFNttt3g9fat01ZeqhxyokgghMJFwxtng2HB00u53r7ngQ
     routes:
-      # This rule proxies all API requests made from the frontend to the backend service.
-      # This avoids CORS issues and hides the backend URL from the client.
       - type: rewrite
         source: /api/:path*
         destination: https://bloxbatttles-api.onrender.com/api/:path*
-      # This rule ensures that all other requests are sent to index.html.
-      # This is standard for SPAs to allow client-side routing to work correctly.
       - type: rewrite
         source: /*
         destination: /index.html
