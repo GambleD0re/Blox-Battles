@@ -13,7 +13,7 @@ databases:
   - name: blox_battles_db
     postgresMajorVersion: "15"
     region: oregon
-    plan: basic-250mb
+    plan: Basic-250mb
 
 # --- Service Definitions ---
 # Web services and static sites are defined under the 'services' block.
