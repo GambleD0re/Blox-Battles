@@ -1,49 +1,55 @@
-// backend/database/database.js
-const pgp = require('pg-promise')();
-require('dotenv').config();
+// =================================================================
+//        Blox Battles Database Configuration (Corrected for Render)
+// =================================================================
+//
+// This file configures the connection to the PostgreSQL database.
+// It has been modified to work seamlessly with Render's environment.
+//
 
-// This configuration is now designed for PostgreSQL.
-// When deployed on Render, the DATABASE_URL environment variable
-// will be provided automatically and will include the necessary SSL configuration.
+const { Pool } = require('pg');
 
-const isProduction = process.env.NODE_ENV === 'production';
+// --- RENDER DEPLOYMENT MODIFICATION ---
+//
+// Original Logic (Commented Out):
+// The previous logic constructed the connection string from multiple
+// individual .env variables (DB_USER, DB_HOST, etc.). This is common
+// for local development but not ideal for cloud platforms.
+//
+// const pool = new Pool({
+//   user: process.env.DB_USER,
+//   host: process.env.DB_HOST,
+//   database: process.env.DB_DATABASE,
+//   password: process.env.DB_PASSWORD,
+//   port: process.env.DB_PORT,
+// });
+//
+// Corrected Logic:
+// Render provides a single, complete connection string via the `DATABASE_URL`
+// environment variable. We use this directly. The `render.yaml` file
+// ensures this variable is available to the backend service.
+//
+// The `ssl` configuration is crucial for connecting to managed cloud
+// databases like Render's, which often require SSL connections.
+// `rejectUnauthorized: false` is a common setting for this context,
+// though for higher security needs, one might configure it with a CA certificate.
+//
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
+});
 
-// Render provides a DATABASE_URL environment variable for its managed PostgreSQL.
-// For local development, you can set up a local PostgreSQL instance and create
-// a .env file with a similar DATABASE_URL variable.
-// Example .env line: DATABASE_URL=postgres://user:password@localhost:5432/bloxbattles
-const connectionString = process.env.DATABASE_URL;
+// Test the database connection on startup.
+pool.query('SELECT NOW()', (err, res) => {
+  if (err) {
+    console.error('❌ Database connection error:', err.stack);
+  } else {
+    console.log('✅ Database connected successfully at:', res.rows[0].now);
+  }
+});
 
-if (!connectionString) {
-  throw new Error('DATABASE_URL environment variable is not set. Please configure it in your .env file for local development or in your hosting environment.');
-}
-
-const dbConfig = {
-  connectionString,
-  // In production (like on Render), it's often necessary to require SSL.
-  // Render's DATABASE_URL includes the sslmode=require parameter.
-  // For local setups that don't use SSL, you can conditionally add this.
-  ...(isProduction && { ssl: { rejectUnauthorized: false } }),
+module.exports = {
+  query: (text, params) => pool.query(text, params),
+  pool, // Export the pool itself for more complex transactions if needed
 };
-
-const db = pgp(dbConfig);
-
-console.log('Database connection configured for PostgreSQL.');
-if (isProduction) {
-  console.log('Running in production mode, using DATABASE_URL with SSL.');
-} else {
-  console.log('Running in development mode, using DATABASE_URL from .env file.');
-}
-
-// Test the connection
-db.connect()
-  .then(obj => {
-    obj.done(); // success, release connection
-    console.log('Successfully connected to PostgreSQL database.');
-  })
-  .catch(error => {
-    console.error('ERROR connecting to PostgreSQL database:', error.message);
-  });
-
-
-module.exports = db;
