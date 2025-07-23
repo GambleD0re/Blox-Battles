@@ -11,9 +11,7 @@ services:
   - type: pserv
     name: blox-battles-db
     # Render will automatically use the latest major version of PostgreSQL.
-    # You can specify a version if needed, e.g., postgresql: "15"
     # The database name will be 'blox_battles_db' by default.
-    # Disk size can be specified if the default is insufficient.
     disk:
       name: postgres-data
       sizeGB: 1
@@ -48,7 +46,7 @@ services:
       # The FRONTEND_URL is the public URL of the frontend service.
       - key: FRONTEND_URL
         fromService:
-          type: static
+          type: web # Corrected from 'static' to 'web'
           name: blox-battles-frontend
           property: url
       # These are secret keys. You MUST set these in the Render dashboard.
@@ -64,8 +62,9 @@ services:
 
   # 3. Frontend Static Site (React / Vite)
   # This service builds and serves the static frontend application.
-  - type: static
+  - type: web # CORRECTED: The type for a static site is 'web'.
     name: blox-battles-frontend
+    runtime: static # CORRECTED: The 'static' specifier belongs in the runtime.
     # The root directory of the frontend code.
     rootDir: ./frontend
     # Commands to build the static assets.
