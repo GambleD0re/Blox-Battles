@@ -7,15 +7,15 @@
 databases:
   - name: blox-battles-db
     postgresMajorVersion: "15" 
-    plan: free 
+    plan: basic-256mb # UPDATED: Moved to the lowest paid database tier.
 
 services:
   # 1. Backend API Service (Node.js / Express)
   - type: web
-    name: bloxbatttles-api 
+    name: blox-battles-api 
     env: node
     rootDir: ./backend
-    plan: free 
+    plan: starter # UPDATED: Moved to the lowest paid web service tier.
     buildCommand: npm install
     startCommand: node server.js
     healthCheckPath: /api/status
@@ -25,11 +25,10 @@ services:
         fromDatabase:
           name: blox-battles-db
           property: connectionString
+      
       - key: BASE_URL
-        fromService:
-          type: web
-          name: bloxbatttles-api
-          property: url
+        value: "https://blox-battles-api.onrender.com"
+
       - key: FRONTEND_URL
         fromService:
           type: web 
@@ -76,6 +75,7 @@ services:
   - type: web 
     name: blox-battles-frontend
     runtime: static 
+    # UPDATED: Removed the 'plan' key as it's not applicable to static sites.
     rootDir: ./frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist 
@@ -86,7 +86,7 @@ services:
     routes:
       - type: rewrite
         source: /api/:path*
-        destination: https://bloxbatttles-api.onrender.com/api/:path*
+        destination: https://blox-battles-api.onrender.com/api/:path*
       - type: rewrite
         source: /*
         destination: /index.html
