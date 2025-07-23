@@ -11,7 +11,7 @@
 # Databases are defined in their own top-level block.
 databases:
   - name: blox_battles_db
-    plan: basic-250mb # Use the lowest paid tier for the database.
+    plan: basic # Use the lowest paid tier for the database.
     region: oregon # You can change this to a region closer to you.
 
 # --- Service Definitions ---
