@@ -1,6 +1,7 @@
-# v2
-# This version removes optional VAPID keys for push notifications
-# and the ADMIN_TEST_API_KEY to simplify production configuration.
+# v4
+# This version implements the proxy rewrite rule for the frontend,
+# which is the most robust and secure method for handling API requests.
+# It also retains the Node.js version update and paid-tier plans.
 # =================================================================
 
 # --- Database Definition ---
@@ -26,7 +27,7 @@ services:
           name: blox_battles_db
           property: connectionString
       - key: NODE_VERSION
-        value: "18.17.1"
+        value: "20.11.0"
       - key: SERVER_URL # Frontend URL
         value: https://blox_battles_web.onrender.com
       - key: BACKEND_URL # This service's own URL
@@ -65,12 +66,16 @@ services:
     buildCommand: "npm install && npm run build"
     staticPublishPath: "./dist"
     routes:
+      # This rule proxies API requests to the backend, avoiding CORS issues.
+      # It must come before the SPA rewrite rule.
       - type: rewrite
         source: /api/:path*
         destination: https://blox_battles_api.onrender.com/api/:path*
+      # This rule handles client-side routing for the SPA.
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
+      # VITE_API_URL is no longer needed as we are using a rewrite rule.
       - key: VITE_STRIPE_PUBLISHABLE_KEY
         sync: false
