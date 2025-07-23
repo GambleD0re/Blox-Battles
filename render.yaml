@@ -1,67 +1,46 @@
 # =================================================================
-#        Render Blueprint for Blox Battles (Corrected)
+#        Render Blueprint for Blox Battles (Final Version)
 # =================================================================
 #
-# This file defines the infrastructure for the Blox Battles application.
-# It consists of three services:
-#   1. blox_battles_db: A PostgreSQL database.
-#   2. blox_battles_api: The Node.js/Express backend web service.
-#   3. blox_battles_web: The React/Vite frontend static site.
-#
-# All service names have been updated to use 'blox_battles' as requested.
+# This version is corrected according to the official Render Blueprint
+# documentation provided in the screenshots. It uses the correct syntax
+# for both the database and the static site frontend.
 #
 
-# ------------------
-#  Database Service
-# ------------------
+# --- Database Definition ---
+# Databases are defined in their own top-level block.
 databases:
-  - name: blox-battles-db
-    plan: Basic-250mb # 'starter' is sufficient for most applications.
-    region: oregon
-    ipAllowList: [] # Allows access from any IP, suitable for Render services.
-    postgresMajorVersion: 15
-    pgaUpgrade:
-      enabled: false
+  - name: blox_battles_db
+    plan: Basic-250mb # Use the lowest paid tier for the database.
+    region: oregon # You can change this to a region closer to you.
 
+# --- Service Definitions ---
+# Web services and static sites are defined under the 'services' block.
 services:
-
-  # ------------------
-  #  Backend API Service
-  # ------------------
+  # --- Backend API Service ---
   - type: web
     name: blox_battles_api
     env: node
-    plan: starter # Specifies the lowest paid instance type.
+    plan: starter # Use the lowest paid tier for the web service.
     rootDir: ./backend
     buildCommand: "npm install"
     startCommand: "node server.js"
     healthCheckPath: /api/status
     envVars:
-      # This pulls the connection string directly from the database service created above.
       - key: DATABASE_URL
         fromService:
           type: psql
           name: blox_battles_db
           property: connectionString
-      # The Node.js version to use. It's good practice to specify it.
       - key: NODE_VERSION
-        value: 18.17.1
-      # This will be the public URL of your frontend service.
-      # It's constructed from the name of the frontend service defined below.
-      - key: SERVER_URL
+        value: "18.17.1"
+      - key: SERVER_URL # Frontend URL
         value: https://blox_battles_web.onrender.com
-      # This will be the public URL of this backend service itself.
-      - key: BACKEND_URL
+      - key: BACKEND_URL # This service's own URL
         value: https://blox_battles_api.onrender.com
       # ---
-      # --- CRITICAL: SECRET & SENSITIVE VARIABLES ---
+      # --- SECRET & SENSITIVE VARIABLES (Set these in Render Dashboard) ---
       # ---
-      # The following keys are sensitive. You MUST set their values as
-      # 'Secret Files' or 'Environment Variables' in the Render dashboard
-      # under the 'Environment' tab for the 'blox_battles_api' service.
-      # The 'sync: false' property prevents Render from overwriting a value
-      # set in the dashboard with an empty one from this file.
-      #
       - key: JWT_SECRET
         sync: false
       - key: SESSION_SECRET
@@ -90,31 +69,25 @@ services:
         sync: false
       - key: PAYOUT_WALLET_PRIVATE_KEY
         sync: false
-      # The Stripe publishable key is also needed by the backend for some operations.
       - key: VITE_STRIPE_PUBLISHABLE_KEY
         sync: false
 
-  # --------------------
-  #  Frontend Web Service
-  # --------------------
-  - type: static
+  # --- Frontend Web Service (Corrected Syntax) ---
+  - type: web # CORRECTED: Static sites are a 'web' type...
     name: blox_battles_web
-    env: static
+    runtime: static # ...with a 'static' runtime.
     rootDir: ./frontend
     buildCommand: "npm install && npm run build"
-    publishPath: "./dist" # The output directory for the Vite build.
-    # Rewrite rule to support client-side routing (e.g., React Router).
-    # All paths that are not files are redirected to the root index.html.
+    staticPublishPath: "./dist" # CORRECTED: This is the proper key for the build output.
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
-      # This injects the backend URL into the frontend build process,
-      # making it available as `import.meta.env.VITE_API_URL`.
       - key: VITE_API_URL
-        value: https://blox_battles_api.onrender.com
-      # The Stripe publishable key for the frontend.
-      # You MUST set this as a secret in the Render dashboard for the 'blox_battles_web' service.
+        fromService:
+          type: web
+          name: blox_battles_api
+          property: url
       - key: VITE_STRIPE_PUBLISHABLE_KEY
         sync: false
