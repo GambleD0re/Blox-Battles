@@ -1,13 +1,17 @@
 // frontend/src/context/AuthContext.jsx
-// Version: 1
-// This version changes the export of AuthContext from 'default' to 'named'
-// to match how it is imported throughout the application, fixing a build error.
+// Version: 2
+// This version adds and exports a custom `useAuth` hook to provide
+// a clean, standard way to consume the context, fixing a build error.
 
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useContext } from 'react';
 import API from '../services/api';
 
-// CORRECTED: Exporting AuthContext as a named export.
 export const AuthContext = createContext();
+
+// This is the new custom hook that components will use.
+export const useAuth = () => {
+    return useContext(AuthContext);
+};
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
@@ -18,9 +22,8 @@ export const AuthProvider = ({ children }) => {
             const token = localStorage.getItem('token');
             if (token) {
                 try {
-                    // Set the token for API requests
                     API.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-                    const { data } = await API.get('/profile'); // Example endpoint
+                    const { data } = await API.get('/profile');
                     setUser(data);
                 } catch (error) {
                     console.error("Session verification failed", error);
