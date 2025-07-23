@@ -1,18 +1,18 @@
 // backend/server.js
-// Version: 1
-// This is the main entry point for the Node.js Express server.
+// Version: 2
+// This version ensures the subscriptions route remains disabled.
 
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const db = require('./database/database'); // Ensures the database pool is created
+const db = require('./database/database');
 
 const app = express();
 
 // Middleware
 app.use(cors({
-    origin: process.env.SERVER_URL, // Use the frontend URL from env
+    origin: process.env.SERVER_URL,
     credentials: true,
 }));
 app.use(express.json());
@@ -32,9 +32,7 @@ const duelHistoryRoutes = require('./routes/duelHistory');
 const inboxRoutes = require('./routes/inbox');
 const logRoutes = require('./routes/logs');
 const taskRoutes = require('./routes/tasks');
-
-// REMOVED: VAPID keys are optional and have been removed.
-// const subscriptionRoutes = require('./routes/subscriptions');
+// const subscriptionRoutes = require('./routes/subscriptions'); // This line remains commented out.
 
 app.use('/api', authRoutes);
 app.use('/api', userRoutes);
@@ -49,17 +47,12 @@ app.use('/api', duelHistoryRoutes);
 app.use('/api', inboxRoutes);
 app.use('/api', logRoutes);
 app.use('/api', taskRoutes);
-
-// REMOVED: VAPID keys are optional and have been removed.
-// app.use('/api', subscriptionRoutes);
+// app.use('/api', subscriptionRoutes); // This line remains commented out.
 
 
-// Serve frontend for production (if applicable)
+// Serve frontend for production
 if (process.env.NODE_ENV === 'production') {
-    // Serve the static files from the React app
     app.use(express.static(path.join(__dirname, '../frontend/dist')));
-
-    // Handles any requests that don't match the ones above
     app.get('*', (req, res) => {
         res.sendFile(path.join(__dirname, '../frontend/dist', 'index.html'));
     });
