@@ -1,192 +1,97 @@
--- This script defines the complete and final structure of the database.
--- It includes all tables and columns needed for the Blox Battles application.
+-- backend/database/schema.sql
+-- Version: 1
+-- This version removes the notifications_enabled column from the users table
+-- and deletes the push_subscriptions table to remove the notification feature.
 
--- Drop tables if they exist to ensure a clean slate.
-DROP TABLE IF EXISTS users;
-DROP TABLE IF EXISTS duels;
-DROP TABLE IF EXISTS tasks;
-DROP TABLE IF EXISTS push_subscriptions;
-DROP TABLE IF EXISTS region_servers;
-DROP TABLE IF EXISTS disputes;
-DROP TABLE IF EXISTS transactions;
-DROP TABLE IF EXISTS gem_purchases;
-DROP TABLE IF EXISTS transaction_history;
-DROP TABLE IF EXISTS payout_requests;
-DROP TABLE IF EXISTS crypto_deposits;
-DROP TABLE IF EXISTS inbox_messages;
+-- Drop tables if they exist to ensure a clean slate on re-initialization.
+DROP TABLE IF EXISTS duel_participants, duel_results, disputes, transactions, duels, users, game_servers, payout_requests, push_subscriptions CASCADE;
 
--- Create the 'users' table with all necessary columns.
--- [MODIFIED] The user status system has been overhauled for the ban/appeals feature.
-CREATE TABLE IF NOT EXISTS users (
-    user_index INTEGER PRIMARY KEY AUTOINCREMENT,
-    id TEXT NOT NULL UNIQUE,
-    email TEXT NOT NULL UNIQUE,
-    password_hash TEXT,
-    google_id TEXT UNIQUE,
-    gems INTEGER DEFAULT 0,
-    wins INTEGER DEFAULT 0,
-    losses INTEGER DEFAULT 0,
-    is_admin BOOLEAN DEFAULT TRUE,
-    linked_roblox_id TEXT,
-    linked_roblox_username TEXT UNIQUE,
-    verification_phrase TEXT,
-    avatar_url TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    password_last_updated TIMESTAMP,
-    push_notifications_enabled BOOLEAN DEFAULT TRUE,
-    -- [REMOVED] The 'is_banned' column is now replaced by the 'status' column.
-    -- [NEW] A more descriptive status for user accounts.
-    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'banned', 'terminated')),
-    ban_applied_at TIMESTAMP, -- [NEW] Timestamp for when the ban was issued.
-    ban_expires_at TIMESTAMP,
-    ban_reason TEXT,
-    crypto_deposit_address TEXT UNIQUE
+-- Users Table: Stores core user information.
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    roblox_user_id VARCHAR(255) UNIQUE,
+    roblox_username VARCHAR(255),
+    balance DECIMAL(12, 2) DEFAULT 0.00 NOT NULL,
+    role VARCHAR(10) DEFAULT 'user' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_login TIMESTAMP WITH TIME ZONE,
+    is_banned BOOLEAN DEFAULT FALSE,
+    ban_expires_at TIMESTAMP WITH TIME ZONE
+    -- REMOVED: notifications_enabled column
 );
 
--- Create the 'crypto_deposits' table to track incoming transactions.
-CREATE TABLE IF NOT EXISTS crypto_deposits (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT NOT NULL,
-    tx_hash TEXT NOT NULL UNIQUE,
-    token_type TEXT NOT NULL CHECK(token_type IN ('USDC', 'USDT', 'POL')),
-    amount_crypto REAL NOT NULL,
-    gem_package_id TEXT NOT NULL,
-    gem_amount INTEGER NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'confirmed', 'credited', 'failed')),
-    block_number INTEGER,
-    required_confirmations INTEGER DEFAULT 30,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    credited_at TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+-- Duels Table: Stores information about each duel.
+CREATE TABLE duels (
+    id SERIAL PRIMARY KEY,
+    status VARCHAR(50) NOT NULL, -- e.g., 'pending', 'accepted', 'active', 'completed', 'disputed'
+    wager_amount DECIMAL(12, 2) NOT NULL,
+    winner_id INTEGER REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-
--- Create the 'gem_purchases' table (formerly transactions)
-CREATE TABLE IF NOT EXISTS gem_purchases (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT NOT NULL,
-    stripe_session_id TEXT NOT NULL UNIQUE,
-    gem_amount INTEGER NOT NULL,
-    amount_paid INTEGER NOT NULL, -- In cents
-    currency TEXT NOT NULL,
-    status TEXT NOT NULL, -- e.g., 'completed'
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
+-- Duel Participants Table: Links users to duels.
+CREATE TABLE duel_participants (
+    duel_id INTEGER NOT NULL REFERENCES duels(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    -- 'challenger' or 'opponent'
+    role VARCHAR(20) NOT NULL,
+    PRIMARY KEY (duel_id, user_id)
 );
 
--- Create the 'transaction_history' table for a unified user-facing log.
-CREATE TABLE IF NOT EXISTS transaction_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT NOT NULL,
-    type TEXT NOT NULL CHECK(type IN ('deposit_stripe', 'deposit_crypto', 'withdrawal', 'duel_wager', 'duel_win', 'admin_adjustment')),
-    amount_gems INTEGER NOT NULL, -- Can be positive or negative
-    description TEXT,
-    reference_id TEXT, -- e.g., duel_id, payout_request_id
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+-- Transactions Table: Logs all balance changes.
+CREATE TABLE transactions (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL, -- 'deposit', 'withdrawal', 'duel_wager', 'duel_win'
+    amount DECIMAL(12, 2) NOT NULL,
+    status VARCHAR(50) NOT NULL, -- 'pending', 'completed', 'failed'
+    related_duel_id INTEGER REFERENCES duels(id),
+    external_tx_id VARCHAR(255), -- For Stripe or Crypto transactions
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create the 'payout_requests' table for an audit trail of all withdrawals.
-CREATE TABLE IF NOT EXISTS payout_requests (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    type TEXT NOT NULL CHECK(type IN ('crypto')),
-    provider TEXT NOT NULL CHECK(provider IN ('direct_node')),
-    provider_payout_id TEXT,
-    amount_gems INTEGER NOT NULL,
-    amount_usd REAL NOT NULL,
-    fee_usd REAL NOT NULL,
-    destination_address TEXT,
-    status TEXT NOT NULL DEFAULT 'awaiting_approval' CHECK(status IN ('awaiting_approval', 'approved', 'declined', 'processing', 'completed', 'failed', 'canceled_by_user')),
-    decline_reason TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
+-- Game Servers Table: Stores information about active bot instances.
+CREATE TABLE game_servers (
+    id SERIAL PRIMARY KEY,
+    server_id VARCHAR(255) UNIQUE NOT NULL,
+    region VARCHAR(100),
+    last_heartbeat TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN DEFAULT TRUE
 );
 
--- Create the 'inbox_messages' table for user notifications about withdrawals.
-CREATE TABLE IF NOT EXISTS inbox_messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT NOT NULL,
-    type TEXT NOT NULL CHECK(type IN ('withdrawal_update', 'admin_message')),
-    title TEXT NOT NULL,
-    message TEXT NOT NULL,
-    reference_id TEXT,
-    is_read BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+-- Payout Requests Table: Manages user withdrawal requests.
+CREATE TABLE payout_requests (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    amount_gems DECIMAL(12, 2) NOT NULL,
+    amount_usd DECIMAL(12, 2),
+    recipient_address VARCHAR(255) NOT NULL,
+    token_type VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'approved', 'declined', 'completed'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-
--- Create the 'duels' table.
-CREATE TABLE IF NOT EXISTS duels (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    challenger_id TEXT NOT NULL,
-    opponent_id TEXT NOT NULL,
-    wager INTEGER NOT NULL,
-    pot INTEGER DEFAULT 0,
-    tax_collected INTEGER DEFAULT 0,
-    banned_weapons TEXT,
-    map TEXT,
-    region TEXT, 
-    status TEXT DEFAULT 'pending',
-    winner_id TEXT,
-    challenger_seen_result BOOLEAN DEFAULT FALSE,
-    opponent_seen_result BOOLEAN DEFAULT FALSE,
-    server_invite_link TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    accepted_at TIMESTAMP,
-    started_at TIMESTAMP, 
-    bot_duel_id TEXT UNIQUE, 
-    transcript TEXT, 
-    FOREIGN KEY (challenger_id) REFERENCES users (id) ON DELETE CASCADE,
-    FOREIGN KEY (opponent_id) REFERENCES users (id) ON DELETE CASCADE,
-    FOREIGN KEY (winner_id) REFERENCES users (id) ON DELETE SET NULL
-);
-
--- Create the 'disputes' table to manage player reports.
-CREATE TABLE IF NOT EXISTS disputes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    duel_id INTEGER NOT NULL,
-    reporter_id TEXT NOT NULL,
-    reported_id TEXT NOT NULL,
+-- Disputes Table: Manages user-filed disputes for duels.
+CREATE TABLE disputes (
+    id SERIAL PRIMARY KEY,
+    duel_id INTEGER NOT NULL REFERENCES duels(id) ON DELETE CASCADE,
+    filing_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     reason TEXT NOT NULL,
-    has_video_evidence BOOLEAN DEFAULT FALSE,
-    status TEXT DEFAULT 'pending',
+    status VARCHAR(50) DEFAULT 'open', -- 'open', 'resolved'
     resolution TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    resolved_at TIMESTAMP,
-    admin_resolver_id TEXT,
-    FOREIGN KEY (duel_id) REFERENCES duels (id) ON DELETE CASCADE,
-    FOREIGN KEY (reporter_id) REFERENCES users (id) ON DELETE CASCADE,
-    FOREIGN KEY (reported_id) REFERENCES users (id) ON DELETE CASCADE,
-    FOREIGN KEY (admin_resolver_id) REFERENCES users (id) ON DELETE SET NULL
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP WITH TIME ZONE
 );
 
--- Create the 'tasks' table.
-CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_type TEXT NOT NULL,
-    payload TEXT,
-    status TEXT DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    completed_at TIMESTAMP
-);
+-- Indexes for performance
+CREATE INDEX idx_users_roblox_id ON users(roblox_user_id);
+CREATE INDEX idx_duels_status ON duels(status);
+CREATE INDEX idx_transactions_user_id ON transactions(user_id);
+CREATE INDEX idx_disputes_status ON disputes(status);
 
--- Create the 'push_subscriptions' table.
-CREATE TABLE IF NOT EXISTS push_subscriptions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT NOT NULL UNIQUE,
-    subscription TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-);
-
--- Create the 'region_servers' table for admins to manage.
-CREATE TABLE IF NOT EXISTS region_servers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    region TEXT NOT NULL CHECK(region IN ('Oceania', 'North America', 'Europe')),
-    server_link TEXT NOT NULL UNIQUE,
-    is_active BOOLEAN DEFAULT TRUE,
-    last_used TIMESTAMP
-);
+-- REMOVED: The push_subscriptions table is no longer needed.
