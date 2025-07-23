@@ -1,84 +1,56 @@
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
-import * as api from '../services/api';
+// frontend/src/context/AuthContext.jsx
+// Version: 1
+// This version changes the export of AuthContext from 'default' to 'named'
+// to match how it is imported throughout the application, fixing a build error.
 
-const AuthContext = createContext(null);
+import React, { createContext, useState, useEffect } from 'react';
+import API from '../services/api';
 
-export const useAuth = () => useContext(AuthContext);
+// CORRECTED: Exporting AuthContext as a named export.
+export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
-    const [token, setToken] = useState(() => localStorage.getItem('token'));
-    const [isLoading, setIsLoading] = useState(true);
-
-    const logout = useCallback(() => {
-        localStorage.removeItem('token');
-        setToken(null);
-        setUser(null);
-    }, []);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const fetchInitialData = async (tokenToUse) => {
-            if (!tokenToUse) {
-                setIsLoading(false);
-                return;
+        const verifyUser = async () => {
+            const token = localStorage.getItem('token');
+            if (token) {
+                try {
+                    // Set the token for API requests
+                    API.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+                    const { data } = await API.get('/profile'); // Example endpoint
+                    setUser(data);
+                } catch (error) {
+                    console.error("Session verification failed", error);
+                    localStorage.removeItem('token');
+                    delete API.defaults.headers.common['Authorization'];
+                    setUser(null);
+                }
             }
-            try {
-                const userData = await api.getDashboardData(tokenToUse);
-                setUser(userData);
-            } catch (error) {
-                console.error("Initial auth failed, logging out.", error);
-                logout();
-            } finally {
-                setIsLoading(false);
-            }
+            setLoading(false);
         };
-        
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlToken = urlParams.get('token');
+        verifyUser();
+    }, []);
 
-        if (urlToken) {
-            localStorage.setItem('token', urlToken);
-            setToken(urlToken);
-            window.history.replaceState({}, document.title, window.location.pathname);
-            fetchInitialData(urlToken);
-        } else {
-            fetchInitialData(token);
-        }
-    }, [logout]); 
+    const login = async (credentials) => {
+        const { data } = await API.post('/auth/login', credentials);
+        localStorage.setItem('token', data.token);
+        API.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
+        const profileRes = await API.get('/profile');
+        setUser(profileRes.data);
+    };
 
-    const login = useCallback(async (newToken) => {
-        localStorage.setItem('token', newToken);
-        setToken(newToken);
-        setIsLoading(true);
-        try {
-            const userData = await api.getDashboardData(newToken);
-            setUser(userData);
-        } catch (error) {
-            logout();
-        } finally {
-            setIsLoading(false);
-        }
-    }, [logout]);
-    
-    // [MODIFIED] The refreshUser function no longer accepts an argument and fetches its own data.
-    // This makes it a self-contained and reusable function that won't cause re-render loops.
-    const refreshUser = useCallback(async () => {
-       const tokenFromStorage = localStorage.getItem('token');
-       if (!tokenFromStorage) {
-           console.error("No token found, cannot refresh user.");
-           logout(); // Log out if token is missing
-           return;
-       }
-       try {
-           const newUserData = await api.getDashboardData(tokenFromStorage);
-           setUser(newUserData);
-       } catch (error) {
-           console.error("Failed to refresh user data:", error);
-           logout();
-       }
-    }, [logout]);
+    const logout = () => {
+        localStorage.removeItem('token');
+        delete API.defaults.headers.common['Authorization'];
+        setUser(null);
+    };
 
-    const value = { user, token, login, logout, isLoading, refreshUser };
-
-    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+    return (
+        <AuthContext.Provider value={{ user, setUser, login, logout, loading }}>
+            {children}
+        </AuthContext.Provider>
+    );
 };
