@@ -11,8 +11,9 @@
 # Databases are defined in their own top-level block.
 databases:
   - name: blox_battles_db
-    plan: basic # Use the lowest paid tier for the database.
-    region: oregon # You can change this to a region closer to you.
+    postgresMajorVersion: "15"
+    region: oregon
+    plan: basic-250mb
 
 # --- Service Definitions ---
 # Web services and static sites are defined under the 'services' block.
