@@ -1,80 +1,91 @@
-# render.yaml
-# This file defines the services for your application for Render.
-# You can deploy all services at once by creating a "Blueprint"
-# in Render and pointing it to your Git repository.
+# =================================================================
+# Render Blueprint for the Blox-Battles Monorepo Application
+#
+# This file defines the complete infrastructure for the project, including:
+#   1. A PostgreSQL database for the backend.
+#   2. A Node.js/Express backend web service.
+#   3. A Vite/React frontend static site.
+#
+# This Blueprint correctly handles the monorepo structure by using
+# the `rootDir` property for each service.
+# =================================================================
 
 databases:
+  # Defines the PostgreSQL database for the application.
   - name: blox-battles-db
-    plan: starter # 'starter' is sufficient for most applications.
-    region: oregon
-    ipAllowList: [] # Allows access from any IP, suitable for Render services.
-    postgresMajorVersion: 15
+    plan: free # Specifies the free-tier plan. Upgrade as needed (e.g., 'starter').
+    region: oregon # IMPORTANT: Choose the region closest to your users.
+                   # All services should be in the same region as the database for low latency.
 
 services:
-  # 1. Backend Web Service (Node.js/Express)
+  # -----------------------------------------------------------------
+  # Backend Service (Node.js + Express)
+  # -----------------------------------------------------------------
   - type: web
-    name: blox-battles-api
-    plan: starter
-    region: oregon
-    env: node
+    name: blox-battles-backend
+    runtime: node # Specifies the Node.js runtime environment.
+    region: oregon # Must match the database region.
+    branch: main # Specifies the Git branch to deploy from (can be 'master').
+    
+    # --- Monorepo Configuration ---
+    # This is the most critical setting for the backend. It tells Render
+    # to run all commands from within the 'backend' directory.
     rootDir: backend
-    buildCommand: npm install
-    startCommand: node server.js
-    healthCheckPath: /api/status
+
+    # --- Build and Start Commands ---
+    # These commands are executed relative to the `rootDir`.
+    buildCommand: "npm install" # Installs dependencies from backend/package.json.
+    startCommand: "npm start" # Runs the start script from backend/package.json.
+
+    # --- Environment Variables ---
+    # This section securely configures the application's environment.
     envVars:
       - key: NODE_ENV
-        value: production
+        value: production # Optimizes Node.js/Express for performance and security.
       - key: DATABASE_URL
         fromDatabase:
+          # Injects the connection string from the database defined above.
+          # This avoids hardcoding credentials.
           name: blox-battles-db
           property: connectionString
-      - key: SERVER_URL
-        value: https://blox-battles-app.onrender.com
-      # Secrets (set in Render Dashboard only)
-      - key: JWT_SECRET
-        sync: false
-      - key: SESSION_SECRET
-        sync: false
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: BOT_API_KEY
-        sync: false
-      - key: VAPID_PUBLIC_KEY
-        sync: false
-      - key: VAPID_PRIVATE_KEY
-        sync: false
-      - key: ADMIN_TEST_API_KEY
-        sync: false
-      - key: STRIPE_SECRET_KEY
-        sync: false
-      - key: STRIPE_WEBHOOK_SECRET
-        sync: false
-      - key: ALCHEMY_POLYGON_URL
-        sync: false
-      - key: ALCHEMY_API_KEY
-        sync: false
-      - key: MASTER_XPUB
-        sync: false
-      - key: PAYOUT_WALLET_PRIVATE_KEY
-        sync: false
+      - key: CRYPTO_PAYOUT_KEY_PATH
+        # Defines a path to a secret file that will be managed in the Render Dashboard.
+        # The application code will read the private key from this file path.
+        value: /etc/secrets/payout-private-key
 
-  # 2. Frontend Static Site (React/Vite)
+  # -----------------------------------------------------------------
+  # Frontend Service (Vite + React Static Site)
+  # -----------------------------------------------------------------
   - type: web
-    name: blox-battles-app
-    plan: starter
-    region: oregon
-    env: static
+    name: blox-battles-frontend
+    runtime: static # CRITICAL: Tells Render to deploy this as a static site on its CDN.
+    region: oregon # Must match the other services' region.
+    branch: main # Specifies the Git branch to deploy from.
+
+    # --- Monorepo Configuration ---
+    # This is the most critical setting for the frontend. It tells Render
+    # to run all commands from within the 'frontend' directory.
     rootDir: frontend
-    buildCommand: npm install && npm run build
-    publishDir: dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+
+    # --- Build and Publish Settings ---
+    # These commands and paths are relative to the `rootDir`.
+    buildCommand: "npm install && npm run build" # Installs dependencies and builds the static assets.
+    publishDir: "dist" # The output directory for the Vite build (frontend/dist).
+
+    # --- Environment Variables (for build time) ---
+    # This demonstrates how to pass the backend URL to the React app during the build process.
+    # This allows the frontend to know the API endpoint without hardcoding it.
     envVars:
-      - key: VITE_API_BASE_URL
-        value: https://blox-battles-api.onrender.com/api
-      - key: VITE_STRIPE_PUBLISHABLE_KEY
-        sync: false
+      - key: VITE_API_URL # Vite exposes env vars prefixed with VITE_ to the app.
+        fromService:
+          type: web
+          name: blox-battles-backend
+          property: url
+
+    # --- Routing Configuration for Single-Page Applications (SPAs) ---
+    # This rule is essential for React Router or other client-side routing libraries.
+    # It ensures that all requests to non-asset paths are redirected to index.html,
+    # allowing the React app to handle the routing.
+    rewrites:
+      - source: "/*"
+        destination: "/index.html"
